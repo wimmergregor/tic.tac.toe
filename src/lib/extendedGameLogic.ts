@@ -32,6 +32,8 @@ export interface ScoredLine {
 	cells: number[];
 	/** The player ID that owns this line (e.g. 'P0', 'P1'). */
 	player: string;
+	/** Direction vector [dr, dc] of the line. */
+	direction: [number, number];
 }
 
 function toIndex(row: number, col: number, gridSize: number): number {
@@ -79,7 +81,7 @@ export function findAllLines(
 				if (allMatch) {
 					const key = [...cells].sort((a, b) => a - b).join(',');
 					if (!lines.has(key)) {
-						lines.set(key, { key, cells, player: startPlayer });
+						lines.set(key, { key, cells, player: startPlayer, direction: [dr, dc] });
 					}
 				}
 			}
@@ -97,12 +99,30 @@ export function detectNewLines(
 	board: ExtendedPlayer[],
 	gridSize: number,
 	connectN: number,
-	previousLineKeys: Set<string>
+	previousLines: Map<string, ScoredLine>,
+	enableMultiConnections: boolean
 ): ScoredLine[] {
 	const current = findAllLines(board, gridSize, connectN);
 	const newLines: ScoredLine[] = [];
+	
 	for (const [key, line] of current) {
-		if (!previousLineKeys.has(key)) newLines.push(line);
+		if (!previousLines.has(key)) {
+			if (!enableMultiConnections) {
+				let isExtension = false;
+				for (const prev of previousLines.values()) {
+					// If they are the same player and going in the same direction
+					if (prev.player === line.player && prev.direction[0] === line.direction[0] && prev.direction[1] === line.direction[1]) {
+						// Check if they share any cell
+						if (prev.cells.some(c => line.cells.includes(c))) {
+							isExtension = true;
+							break;
+						}
+					}
+				}
+				if (isExtension) continue; // It's an extension, ignore it
+			}
+			newLines.push(line);
+		}
 	}
 	return newLines;
 }
@@ -164,10 +184,11 @@ function countNewLinesIfPlaced(
 	player: string,
 	gridSize: number,
 	connectN: number,
-	knownLineKeys: Set<string>
+	knownLines: Map<string, ScoredLine>,
+	enableMultiConnections: boolean
 ): number {
 	board[cellIndex] = player;
-	const count = detectNewLines(board, gridSize, connectN, knownLineKeys)
+	const count = detectNewLines(board, gridSize, connectN, knownLines, enableMultiConnections)
 		.filter((l) => l.player === player).length;
 	board[cellIndex] = null;
 	return count;
@@ -221,14 +242,15 @@ function scoreMoveMulti(
 	allPlayerIds: string[],
 	gridSize: number,
 	connectN: number,
-	knownLineKeys: Set<string>
+	knownLines: Map<string, ScoredLine>,
+	enableMultiConnections: boolean
 ): number {
-	const offensive = countNewLinesIfPlaced(board, cellIndex, aiPlayerId, gridSize, connectN, knownLineKeys);
+	const offensive = countNewLinesIfPlaced(board, cellIndex, aiPlayerId, gridSize, connectN, knownLines, enableMultiConnections);
 
 	let defensive = 0;
 	for (const pid of allPlayerIds) {
 		if (pid === aiPlayerId) continue;
-		defensive += countNewLinesIfPlaced(board, cellIndex, pid, gridSize, connectN, knownLineKeys);
+		defensive += countNewLinesIfPlaced(board, cellIndex, pid, gridSize, connectN, knownLines, enableMultiConnections);
 	}
 
 	const potential = countNearCompleteLines(board, cellIndex, aiPlayerId, gridSize, connectN);
@@ -261,7 +283,8 @@ export function getExtendedAIMove(
 	aiPlayerId: string,
 	allPlayerIds: string[],
 	difficulty: Difficulty,
-	knownLineKeys: Set<string>
+	knownLines: Map<string, ScoredLine>,
+	enableMultiConnections: boolean
 ): number {
 	const empty: number[] = [];
 	for (let i = 0; i < board.length; i++) {
@@ -275,7 +298,7 @@ export function getExtendedAIMove(
 	const scored = empty
 		.map((idx) => ({
 			index: idx,
-			score: scoreMoveMulti(board, idx, aiPlayerId, allPlayerIds, gridSize, connectN, knownLineKeys)
+			score: scoreMoveMulti(board, idx, aiPlayerId, allPlayerIds, gridSize, connectN, knownLines, enableMultiConnections)
 		}))
 		.sort((a, b) => b.score - a.score);
 

@@ -5,7 +5,8 @@
 		checkExtendedGameOver,
 		getExtendedAIMove,
 		DEFAULT_EXTENDED_CONFIG,
-		type ExtendedResult
+		type ExtendedResult,
+		type ScoredLine
 	} from '$lib/extendedGameLogic';
 
 	/** Visual definition for each player slot (P0 = human, P1-P4 = AI). */
@@ -34,6 +35,7 @@
 	let extConnectN = $state(DEFAULT_EXTENDED_CONFIG.connectN);
 	/** Number of AI opponents in Extended mode (1–4). */
 	let extNumAI = $state(1);
+	let extEnableMultiConnections = $state(false);
 
 	// ─── Classic game state ─────────────────────────────────────────────────────
 	let board = $state<Player[]>(Array(9).fill(null));
@@ -48,7 +50,7 @@
 	let extCurrentPlayerIdx = $state(0);
 	/** Score keyed by player ID ('P0'…'P4'). */
 	let extScores = $state<Record<string, number>>({ P0: 0, P1: 0, P2: 0, P3: 0, P4: 0 });
-	let extScoredLineKeys = $state<Set<string>>(new Set());
+	let extScoredLines = $state<Map<string, ScoredLine>>(new Map());
 	let extHighlightedCells = $state<Map<number, string>>(new Map());
 	let extResult = $state<ExtendedResult>({ status: 'ongoing' });
 	let extIsAITurn = $state(false);
@@ -65,7 +67,7 @@
 		extBoard = Array(extGridSize * extGridSize).fill(null);
 		extCurrentPlayerIdx = 0;
 		extScores = { P0: 0, P1: 0, P2: 0, P3: 0, P4: 0 };
-		extScoredLineKeys = new Set();
+		extScoredLines = new Map();
 		extHighlightedCells = new Map();
 		extResult = { status: 'ongoing' };
 		extIsAITurn = false;
@@ -105,17 +107,17 @@
 		const playerId = PLAYER_DEFS[extCurrentPlayerIdx].id;
 		extBoard[index] = playerId;
 
-		const newLines = detectNewLines(extBoard, extGridSize, extConnectN, extScoredLineKeys);
-		const newKeys = new Set(extScoredLineKeys);
+		const newLines = detectNewLines(extBoard, extGridSize, extConnectN, extScoredLines, extEnableMultiConnections);
+		const newMap = new Map(extScoredLines);
 		const newHighlights = new Map(extHighlightedCells);
 		const newScores = { ...extScores };
 		for (const line of newLines) {
-			newKeys.add(line.key);
+			newMap.set(line.key, line);
 			for (const cell of line.cells) newHighlights.set(cell, line.player);
 			newScores[line.player] = (newScores[line.player] ?? 0) + 1;
 			triggerFlash(line.player);
 		}
-		extScoredLineKeys = newKeys;
+		extScoredLines = newMap;
 		extHighlightedCells = newHighlights;
 		extScores = newScores;
 
@@ -141,7 +143,7 @@
 				const ai = getExtendedAIMove(
 					extBoard, extGridSize, extConnectN,
 					PLAYER_DEFS[nextIdx].id, capturedIds,
-					difficulty, extScoredLineKeys
+					difficulty, extScoredLines, extEnableMultiConnections
 				);
 				if (ai !== -1) placeExtMark(ai);
 				else extIsAITurn = false;
@@ -252,6 +254,13 @@
 					<span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Connect: {extConnectN}</span>
 					<input type="range" min="3" max="5" bind:value={extConnectN} oninput={resetExtended}
 						class="w-20 accent-white/60 cursor-pointer h-6" />
+				</div>
+				<div class="flex flex-col gap-1.5 animate-fade-in items-center justify-center">
+					<span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Multi-Connections</span>
+					<label class="relative inline-flex items-center cursor-pointer mt-1">
+						<input type="checkbox" bind:checked={extEnableMultiConnections} onchange={resetExtended} class="sr-only peer">
+						<div class="w-9 h-5 bg-black/40 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white/80 after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500/80"></div>
+					</label>
 				</div>
 			{/if}
 
@@ -403,10 +412,10 @@
 
 			<!-- Classic Board -->
 			<div class="glass-panel p-6 md:p-8 rounded-3xl shadow-2xl relative mb-10 border border-white/5">
-				<div class="grid grid-cols-3 gap-3 md:gap-4 w-72 h-72 md:w-96 md:h-96">
+				<div class="grid grid-cols-3 grid-rows-3 gap-3 md:gap-4 w-72 h-72 md:w-96 md:h-96">
 					{#each board as cell, index}
 						<button
-							class="cell flex items-center justify-center rounded-2xl text-6xl md:text-7xl shadow-inner transition-all duration-300
+							class="cell flex items-center justify-center w-full h-full rounded-2xl text-6xl md:text-7xl shadow-inner transition-all duration-300
 								{cell === null && !isGameOver && !isAITurn ? 'hover:bg-white/10 cursor-pointer active:scale-95' : 'cursor-default'}
 								{cell ? 'bg-black/40' : 'bg-black/20'}"
 							onclick={() => handleMove(index)}
