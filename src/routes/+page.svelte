@@ -274,14 +274,14 @@
 				<div class="flex flex-col items-center gap-1">
 					<span class="text-xs font-bold uppercase tracking-widest {t.xColor}">Player X</span>
 					<div class="relative">
-						<span class="text-5xl font-black {t.xColor} {t.xDrop} tabular-nums">{extScoreX}</span>
-						{#if extScoreFlash?.player === 'X'}
+						<span class="text-5xl font-black {t.xColor} {t.xDrop} tabular-nums">{extScores['P0'] ?? 0}</span>
+						{#if extScoreFlash?.playerId === 'P0'}
 							<span class="score-flash {t.xColor}" style="left:100%">+1</span>
 						{/if}
 					</div>
 					<div class="w-32 h-1.5 rounded-full bg-black/30 overflow-hidden">
 						<div class="h-full rounded-full {t.xColor} bg-current transition-all duration-500"
-							style="width:{Math.min(100,(extScoreX/extTargetScore)*100)}%"></div>
+							style="width:{Math.min(100,((extScores['P0'] ?? 0)/extTargetScore)*100)}%"></div>
 					</div>
 					<span class="text-white/30 text-xs">of {extTargetScore}</span>
 				</div>
@@ -293,14 +293,14 @@
 				<div class="flex flex-col items-center gap-1">
 					<span class="text-xs font-bold uppercase tracking-widest {t.oColor}">AI (O)</span>
 					<div class="relative">
-						<span class="text-5xl font-black {t.oColor} {t.oDrop} tabular-nums">{extScoreO}</span>
-						{#if extScoreFlash?.player === 'O'}
+						<span class="text-5xl font-black {t.oColor} {t.oDrop} tabular-nums">{extScores['P1'] ?? 0}</span>
+						{#if extScoreFlash?.playerId === 'P1'}
 							<span class="score-flash {t.oColor}" style="left:100%">+1</span>
 						{/if}
 					</div>
 					<div class="w-32 h-1.5 rounded-full bg-black/30 overflow-hidden">
 						<div class="h-full rounded-full {t.oColor} bg-current transition-all duration-500"
-							style="width:{Math.min(100,(extScoreO/extTargetScore)*100)}%"></div>
+							style="width:{Math.min(100,((extScores['P1'] ?? 0)/extTargetScore)*100)}%"></div>
 					</div>
 					<span class="text-white/30 text-xs">of {extTargetScore}</span>
 				</div>
@@ -310,10 +310,10 @@
 			<div class="h-10 mb-3 flex items-center justify-center">
 				{#if extResult.status !== 'ongoing'}
 					{@const w = extResult.status === 'target_reached' ? extResult.winner : (extResult.status === 'board_full' ? extResult.winner : null)}
-					{#if w === 'X'}
-						<div class="status-banner bg-emerald-500/20 text-emerald-400 border border-emerald-500/50">🎉 Player X wins!</div>
-					{:else if w === 'O'}
-						<div class="status-banner bg-rose-500/20 text-rose-400 border border-rose-500/50">💀 The AI wins!</div>
+					{#if w === 'P0'}
+						<div class="status-banner bg-emerald-500/20 text-emerald-400 border border-emerald-500/50">🎉 You win!</div>
+					{:else if w && w !== 'tie'}
+						<div class="status-banner bg-rose-500/20 text-rose-400 border border-rose-500/50">💀 {getPlayerDef(w).label} wins!</div>
 					{:else}
 						<div class="status-banner bg-amber-500/20 text-amber-400 border border-amber-500/50">🤝 It's a draw!</div>
 					{/if}
@@ -338,20 +338,20 @@
 				>
 					{#each extBoard as cell, index}
 						{@const highlight = extHighlightedCells.get(index)}
+						{@const hlDef = highlight ? getPlayerDef(highlight) : null}
+						{@const cellDef = cell ? getPlayerDef(cell) : null}
 						<button
 							class="ext-cell flex items-center justify-center rounded-md transition-all duration-200
-								{cell === null && extResult.status === 'ongoing' && !extIsAITurn ? 'hover:bg-white/15 cursor-pointer active:scale-90' : 'cursor-default'}
+								{cell === null && extResult.status === 'ongoing' && !extIsAITurn && extCurrentPlayerIdx === 0 ? 'hover:bg-white/15 cursor-pointer active:scale-90' : 'cursor-default'}
 								{cell ? 'bg-black/40' : 'bg-black/20'}"
 							style="width:{cellPx}px; height:{cellPx}px; font-size:{cellFontSize}px;
-								{highlight ? `box-shadow: inset 0 0 0 2px ${highlight === 'X' ? t.xRing : t.oRing}, 0 0 8px ${highlight === 'X' ? t.xRing : t.oRing};` : ''}"
+								{hlDef ? `box-shadow: inset 0 0 0 2px ${hlDef.ring}, 0 0 8px ${hlDef.ring};` : ''}"
 							onclick={() => handleExtMove(index)}
 							aria-label="Cell {index}"
-							disabled={cell !== null || extResult.status !== 'ongoing' || extIsAITurn}
+							disabled={cell !== null || extResult.status !== 'ongoing' || extIsAITurn || extCurrentPlayerIdx !== 0}
 						>
-							{#if cell === 'X'}
-								<span class="{t.xColor} {t.xDrop} font-black mark-appear leading-none">X</span>
-							{:else if cell === 'O'}
-								<span class="{t.oColor} {t.oDrop} font-black mark-appear leading-none">O</span>
+							{#if cellDef}
+								<span class="font-black mark-appear leading-none" style="color:{cellDef.color}; filter:drop-shadow({cellDef.glow});">{cellDef.symbol}</span>
 							{/if}
 						</button>
 					{/each}
